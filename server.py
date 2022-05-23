@@ -1,32 +1,19 @@
 from xmlrpc.server import SimpleXMLRPCServer
 import sqlite3
+
+#Access database
 conn = sqlite3.connect("studentMarks.db")
 
 #Initialise server
 server = SimpleXMLRPCServer(('localhost', 3000), logRequests = True)
 
-testingMarkListTwelve = [("CS1", 45), ("CS1", 45), ("CS1", 90), ("CS2", 85), ("CS3", 95), ("CS4", 90), ("CS5", 80), ("CS6", 80), ("CS7", 45), ("CS7", 90), ("CS8", 85), ("CS9", 95)]
-testingMarkListThirty = [("CS1", 45), ("CS1", 45), ("CS1", 90), ("CS2", 85), ("CS3", 95), ("CS4", 90), ("CS5", 80), ("CS6", 80), ("CS7", 45), ("CS7", 90), ("CS8", 85), ("CS9", 95), ("CS10", 12), ("CS10", 40), ("CS10", 65), ("CS11", 65), ("CS12", 66), ("CS13", 67), ("CS14", 68), ("CS15", 69), ("CS16", 70), ("CS17", 71), ("CS18", 72), ("CS19", 73), ("CS19", 74), ("CS20", 75), ("CS21", 76), ("CS22", 77), ("CS23", 78), ("CS24", 79)]
-#Contains student information in format[[personID, lastName, email, [markList]]]
-database = [
-            #Six failures
-            ["SixF", "Fails", "sixf@EOU", [("CS1", 30), ("CS1", 20), ("CS1", 55), ("CS2", 12), ("CS2", 30), ("CS2", 60), ("CS3", 10), ("CS3", 20), ("CS3", 51), ("CS4", 55), ("CS5", 70), ("CS6", 60)]],
-            #Course Average >= 70
-            ["BobD", "Dylan", "bobd@EOU", testingMarkListTwelve],
-            #Course Average >= 65, Best eight average >= 80
-            ["EightQ", "Qualified", "eightq@EOU", [("CS1", 45), ("CS1", 50), ("CS2", 49), ("CS2", 55), ("CS3", 70), ("CS4", 80), ("CS5", 90), ("CS6", 80), ("CS7", 95), ("CS8", 85), ("CS9", 50), ("CS10", 90)]],
-            #Course average >= 60, Best eight average >= 80
-            ["ChanceF", "Further", "chancef@EOU", [("CS1", 10), ("CS1", 50), ("CS2", 10), ("CS2", 55), ("CS3", 70), ("CS4", 80), ("CS5", 90), ("CS6", 80), ("CS7", 95), ("CS8", 85), ("CS9", 50), ("CS10", 90)]],
-            #Course Average >= 60, Best eight average < 80
-            ["RheaS", "Sess", "rheas@EOU", [("CS1", 45), ("CS1", 50), ("CS2", 49), ("CS2", 55), ("CS3", 70), ("CS4", 80), ("CS5", 90), ("CS6", 80), ("CS7", 80), ("CS8", 85), ("CS9", 49), ("CS10", 51)]],
-            #Course average < 60
-            ["NoC", "Chance", "noc@EOU", [("CS1", 10), ("CS1", 51), ("CS2", 10), ("CS2", 55), ("CS3", 55), ("CS4", 55), ("CS5", 55), ("CS6", 55), ("CS7", 55), ("CS8", 55), ("CS9", 50), ("CS10", 55)]],
-            ]
-
 #SERVER
+
+#Prints the contents of the provided unitMarkList
 def printMarks(unitMarkList):
     for unitMark in unitMarkList:  
         print(unitMark[0] + ": " + str(unitMark[1]))
+        
 #Returns the average mark from unitMarkList
 def calculateCourseAverage(unitMarkList):
 	markSum = 0;
@@ -38,13 +25,15 @@ def calculateCourseAverage(unitMarkList):
 
 #Returns an average mark generated from the 8 highest scores in unitMarkList
 def calculateBestEightAverage(unitMarkList):
-#-1 indicates empty slot; can we assume marks are positive?
+    #-1 indicates empty slot as marks must be >= 0
 	bestEight = [-1, -1, -1, -1, -1, -1, -1, -1]
 	for unitMarkTuple in unitMarkList:
 		for pos in range(8):
-			# if mark is greater than or equal to score at pos in bestEight, and less than or equal to the next score up (I.E. if score belongs in this position)
+			# if mark is greater than or equal to score at pos in bestEight, and less than or equal to the next score up (Or there is no next score) then score belongs at position
 			if unitMarkTuple[1] >= bestEight[pos] and (pos == 7 or unitMarkTuple[1] <= bestEight[pos+1]):
+                #remove lowest score
 				bestEight.pop(0)
+                #Add in score at pos
 				bestEight.insert(pos, unitMarkTuple[1])
 				break
 	markSum = 0
@@ -56,6 +45,7 @@ def calculateBestEightAverage(unitMarkList):
 
 
 #Returns the response string that matches how qualified for honors study a student with the provided dataset is
+#Called remotely by user inputting their own marks, or called locally by EOUStudentEvaluation with data from the database
 def evaluateQualification(personID, unitMarkList):
 	courseAverage = calculateCourseAverage(unitMarkList)
 	bestEightAverage = calculateBestEightAverage(unitMarkList)
@@ -76,9 +66,9 @@ def evaluateQualification(personID, unitMarkList):
 	else:
 		return str(personID) + ", " + str(courseAverage) + ", DOES NOT QUALIFY FOR HONORS STUDY!"
 
-
+#Performs an evaluation using mark data from the database, returns evaluation or no matching record message if provided details do not match a recorded student
+#Called remotely by user wanting an evaluation using data from database
 def EOUStudentEvaluation(personID, lastName, email):
-    
     unitMarkList = conn.execute("SELECT marks.unitCode, marks.mark FROM student INNER JOIN marks ON student.personID = marks.personID WHERE student.personID = '" + personID + "' AND student.lastName = '" + lastName + "' AND student.email = '" + email + "'").fetchall()
     if len(unitMarkList) > 0:
         return(evaluateQualification(personID, unitMarkList))
@@ -87,7 +77,7 @@ def EOUStudentEvaluation(personID, lastName, email):
         
         
 
-#Register RPCable functions
+#Register Remote Proceure Callable functions
 server.register_function(evaluateQualification)
 server.register_function(EOUStudentEvaluation)
 
